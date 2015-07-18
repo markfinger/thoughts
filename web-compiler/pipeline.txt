@@ -1,0 +1,17 @@
+```
+read(file, translator=None):
+  content = readFile(file)
+  if translator:
+    content = translator(content)
+  deps = lookForDeps(content)
+  for dep in deps:
+    read(dep)
+
+emit(files):
+  for file in files:
+    writeFile(file)
+    
+files = read(file)
+
+emit(files)
+```
