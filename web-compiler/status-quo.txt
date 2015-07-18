@@ -42,6 +42,7 @@ Status quo
   + code-splitting
     - opaque
     + effective
+    + loading on-demand
   - defaults to JS modules
     + handles most use-cases
     - requires hacky behaviour to mutate or transform assets
