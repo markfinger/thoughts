@@ -1,0 +1,88 @@
+Status quo
+----------
+
++ webpack
+  + simple interface
+    + easy startup
+    - opaque and hides complexity
+    - difficult to profile, debug or reason about
+  + compiler hooks
+    + large amount of plugin hooks
+    + add/remove assets during compilation
+      + allows external compilers to inject assets
+      + allows transformations and extraction into differnt
+      - difficult to reason about
+    + mutate assets during compilation
+      - difficult to reason about final outcome
+    - poorly documented
+      - over-reliance on pre-existing libs for code samples
+  + modular, batteries-included, design
+    + functions are clearly delineated
+    + best of breed packages
+      + no splintering from community
+      - webpack core is controlled by one individual
+        - slow development
+        - bus factor
+        - lack of community participation
+        - code/doc improvements must come from core
+          - poor docs
+    - implicit behaviour due to coupling
+      - ex: including uglify plugin automatically causes every loader to optimize
+  - poor docs
+    - internal docs are non-existant
+      - difficult to understand codebase
+      - difficult to understand interplay betweens modules
+    - external docs are patchy
+      - over-reliance on community contributions
+  - loader configuration
+    - basic
+    - opaque
+    - string-based query params are difficult to read and compilicate the cascade of loaders
+    + query params can defined in a 'query' prop
+  + code-splitting
+    - opaque
+    + effective
+  - defaults to JS modules
+    + handles most use-cases
+    - requires hacky behaviour to mutate or transform assets
+  - Non-standard coding conventions (tabs vs spaces)
+  + async core prevents lockups in the event loop
+  - slow builds
+    - initial builds are slow
+      - no caching
+      - difficult to rebuild state from serialized data
+        - heavy-use of objects and generated props/methods
+    - synchronous loaders can lock up the event loop
+      - upstream, difficult to fix
+    + incremental builds are fast
+      + maintains cache
+        - mutable object
+  + configuration system
+    + powerful
+    - opaque
+      - poor docs
+    - no validation ensures opaque behaviour
+      - easy to make mistakes
+      - ex: 'loaders' in root, rather than 'modules'
+    - mutable config objects
+      - successive builds in the same process will break in weird ways
+      + extending the object can help to illustrate config problems
+  + hot module replacement
+    + works
+    - slow
+      + see figwheel for rapid reloads
+      + probably down to compilation and source map generation
+      
++ browserify
+  - poor API
+    - seems to be mostly oriented around the CLI interface
+    - opaque
+  + well-written, modular design
+    + clear divisions enable decoupling
+      + decoupling ensures API contract
+  - heavy-dependence on third party libs
+    - varying degrees of quality
+    + more packages ensures that individual packages can be maintained more easily
+      + more eyes ...
+  + stream-based
+    + async by default
