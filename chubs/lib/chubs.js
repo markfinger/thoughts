@@ -1,5 +1,9 @@
 'use strict';
 
+Object.defineProperty(exports, '__esModule', {
+  value: true
+});
+
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { 'default': obj }; }
 
 var _path = require('path');
@@ -16,17 +20,23 @@ var _resolve = require('resolve');
 
 var _resolve2 = _interopRequireDefault(_resolve);
 
-var _logger = require('./logger');
-
-var _logger2 = _interopRequireDefault(_logger);
-
 var _lodash = require('lodash');
 
 var _lodash2 = _interopRequireDefault(_lodash);
 
+var _watchpack = require('watchpack');
+
+var _watchpack2 = _interopRequireDefault(_watchpack);
+
+var _logger = require('./logger');
+
+var _logger2 = _interopRequireDefault(_logger);
+
 var moduleId = 0;
 var modules = Object.create(null);
 var modulesByFilename = Object.create(null);
+
+var wp = new _watchpack2['default']();
 
 var resolveLog = (0, _logger2['default'])('resolve');
 var depLog = (0, _logger2['default'])('dep');
@@ -45,54 +55,54 @@ function getDep(filename, dep) {
 
   resolveLog('resolved dep "' + dep + '" to ' + depPath);
 
-  return getModule(depPath);
+  return getModuleByFilename(depPath);
 }
 
 function addDep(filename, name) {
-  depLog('Adding dep "' + name + '" to ' + filename);
-
   var depModule = getDep(filename, name);
+  var mod = getModuleByFilename(filename);
 
-  var _module = getModule(filename);
+  if (!_lodash2['default'].contains(depModule.dependents, mod.id)) {
+    depModule.dependents.push(mod.id);
+  }
 
-  _module.dependencies.push({
-    id: depModule.id,
-    name: name,
-    filename: depModule.filename
-  });
+  if (!_lodash2['default'].contains(mod.dependencies, depModule.id)) {
+    mod.dependencies.push(depModule.id);
+  }
 
-  depLog('Added dep "' + depModule.filename + '" to ' + _module.filename);
+  depLog('Added dep "' + depModule.id + '" to ' + mod.id);
 
   return depModule;
 }
 
-function getModule(filename) {
+function getModuleByFilename(filename) {
   moduleLog('request for module "' + filename + '"');
-
-  if (!filename) {
-    throw new Error('h');
-  }
 
   var id = modulesByFilename[filename];
 
-  if (id) {
+  if (id && modules[id]) {
     return modules[id];
-  } else {
+  } else if (!id) {
     id = (++moduleId).toString();
   }
 
-  var _module = {
+  var mod = {
     id: id,
     filename: filename,
-    dependencies: []
+    dependencies: [],
+    dependents: []
   };
 
-  modules[id] = _module;
+  modules[id] = mod;
   modulesByFilename[filename] = id;
 
-  moduleLog('created module ' + _module.id + ' for "' + filename + '"');
+  moduleLog('created module ' + mod.id + ' for "' + filename + '"');
 
-  return _module;
+  return mod;
+}
+
+function getModuleById(id) {
+  return modules[id];
 }
 
 var depTransform = 'chubs-deps';
@@ -123,18 +133,18 @@ _babelCore.transform.pipeline.addTransformer(depTransform, {
   }
 });
 
-function build(filename) {
+function build(mod) {
+  var filename = mod.filename;
+
   buildLog('building ' + filename);
 
   var buildStart = Date.now();
 
-  var _module = getModule(filename);
-
-  if (!_module.code) {
+  if (!mod.code) {
     buildLog('reading ' + filename);
 
     var whitelist = undefined;
-    if (/node_modules/.test(filename)) {
+    if (/nodemods/.test(filename)) {
       whitelist = [depTransform];
     }
 
@@ -152,22 +162,18 @@ function build(filename) {
 
     parseLog('Spent ' + (parseEnd - parseStart) + 'ms parsing ' + filename);
 
-    _module.code = data.code;
+    mod.code = data.code;
   }
 
   var buildEnd = Date.now();
   buildPerfLog('Spent ' + (buildEnd - buildStart) + 'ms building ' + filename);
 
-  if (_module.dependencies.length) {
+  if (mod.dependencies.length) {
     var buildDepsStart = Date.now();
 
-    _module.dependencies.forEach(function (dep) {
-      var depModule = getModule(dep.filename);
-
-      if (!depModule.code) {
-        buildLog('building dependency ' + depModule.filename);
-        build(depModule.filename);
-      }
+    mod.dependencies.forEach(function (id) {
+      var depModule = getModuleById(id);
+      build(depModule);
     });
 
     var buildDepsEnd = Date.now();
@@ -175,24 +181,63 @@ function build(filename) {
   }
 }
 
-function chubs(filename) {
-  build(filename);
+function defineModule(mod) {
+  var commentDivider = _lodash2['default'].repeat('-', mod.filename.length);
 
-  var definitions = [];
-
-  for (var id in modules) {
-    var _module = modules[id];
-    var commentDivider = _lodash2['default'].repeat('-', _module.filename.length);
-    var definition = '\n__define(\'' + _module.id + '\', function(module, exports, require) {\n// start: ' + _module.filename + '\n// -------' + commentDivider + '\n\n\n' + _module.code + '\n\n\n// -----' + commentDivider + '\n// end: ' + _module.filename + '\n});';
-    definitions.push(definition);
-  }
-
-  var entryModule = modulesByFilename[filename];
-
-  var script = '\n(function() {\nvar __global = this;\nvar __modules = Object.create(null);\nvar __requireCache = Object.create(null);\n\nfunction __require(dep) {\n  if (__requireCache[dep] !== undefined) {\n    return __requireCache[dep];\n  }\n\n  var module = {exports: {}};\n\n  __requireCache[dep] = __modules[dep].call(__global, module, module.exports, __require);\n\n  return module.exports;\n};\n\nvar __define = function(id, _module) {\n  __modules[id] = _module;\n};\n\n' + definitions.join('\n\n') + '\n\n\n__require(\'' + entryModule + '\');\n\n})();\n  ';
-
-  console.log(script);
+  return '\n// --------------------' + commentDivider + '\n// Module ' + mod.id + ' -> ' + mod.filename + '\n// --------------------' + commentDivider + '\n__define(\'' + mod.id + '\', function(module, exports, require) {\n' + mod.code + '\n});';
 }
 
-module.exports = chubs;
+function defineModules(modules) {
+  return _lodash2['default'].map(modules, defineModule);
+}
+
+function generateScript(modules, entry) {
+  var entryModule = getModuleByFilename(entry);
+
+  return '\n(function() {\n// Preserve a reference to the global\nvar __global = this;\n\n// A map of module ids to module functions\nvar __moduleDefinitions = Object.create(null);\n\n// A store of the cached output from the module definitions\nvar __requireCache = Object.create(null);\n\n// The `require` function used by the modules\nfunction __require(dep) {\n  if (__requireCache[dep] !== undefined) {\n    return __requireCache[dep];\n  }\n\n  var _module = {exports: {}};\n\n  var moduleDefinition = __moduleDefinitions[dep];\n\n  __requireCache[dep] = moduleDefinition.call(__global, _module, _module.exports, __require);\n\n  return module.exports;\n};\n\n// Populate the module definitions\nvar __define = function(id, func) {\n  __moduleDefinitions[id] = func;\n};\n\n' + defineModules(modules).join('\n\n') + '\n\n\n// Call ' + entryModule.filename + '\n__require(\'' + entryModule.id + '\');\n\n})();\n  ';
+}
+
+function watch(modules, startTime) {
+  var filenames = (0, _lodash2['default'])(modules).values().pluck('filename').value();
+
+  wp.watch(filenames, [], startTime);
+}
+
+function chubs(opts, cb) {
+  var startTime = Date.now();
+
+  var entry = opts.entry;
+  if (!entry) {
+    throw new Error('Entry option was not defined in ' + JSON.stringify(opts));
+  }
+
+  if (!_path2['default'].isAbsolute(entry)) {
+    entry = _path2['default'].resolve(entry);
+  }
+
+  console.log('Entry: ' + entry);
+
+  var mod = getModuleByFilename(entry);
+
+  build(mod);
+
+  watch(modules, startTime);
+
+  wp.on('change', function (filename) {
+    var mod = getModuleByFilename(filename);
+    mod.code = undefined;
+    build(mod);
+    console.log('Rebuilt module ' + mod.id + ': ' + mod.filename);
+  });
+
+  cb({
+    startTime: startTime,
+    entry: entry,
+    output: generateScript(modules, entry),
+    modules: modules
+  });
+}
+
+exports['default'] = chubs;
+module.exports = exports['default'];
 //# sourceMappingURL=chubs.js.map

@@ -2,12 +2,15 @@ import path from 'path';
 import {transform, types} from 'babel-core';
 import fs from 'fs';
 import resolve from 'resolve';
-import logger from './logger';
 import _ from 'lodash';
+import Watchpack from 'watchpack';
+import logger from './logger';
 
 let moduleId = 0;
 let modules = Object.create(null);
 let modulesByFilename = Object.create(null);
+
+const wp = new Watchpack();
 
 const resolveLog = logger('resolve');
 const depLog = logger('dep');
@@ -26,54 +29,54 @@ function getDep(filename, dep) {
 
   resolveLog(`resolved dep "${dep}" to ${depPath}`);
 
-  return getModule(depPath);
+  return getModuleByFilename(depPath);
 }
 
 function addDep(filename, name) {
-  depLog(`Adding dep "${name}" to ${filename}`);
-
   let depModule = getDep(filename, name);
+  let mod = getModuleByFilename(filename);
 
-  let _module = getModule(filename);
+  if (!_.contains(depModule.dependents, mod.id)) {
+    depModule.dependents.push(mod.id);
+  }
 
-  _module.dependencies.push({
-    id: depModule.id,
-    name: name,
-    filename: depModule.filename
-  });
+  if (!_.contains(mod.dependencies, depModule.id)) {
+    mod.dependencies.push(depModule.id);
+  }
 
-  depLog(`Added dep "${depModule.filename}" to ${_module.filename}`);
+  depLog(`Added dep "${depModule.id}" to ${mod.id}`);
 
   return depModule;
 }
 
-function getModule(filename) {
+function getModuleByFilename(filename) {
   moduleLog(`request for module "${filename}"`);
-
-  if (!filename) {
-    throw new Error('h')
-  }
 
   let id = modulesByFilename[filename];
 
-  if (id) {
+  if (id && modules[id]) {
     return modules[id];
-  } else {
+  } else if (!id) {
     id = (++moduleId).toString();
   }
 
-  const _module = {
+  const mod = {
     id: id,
     filename: filename,
-    dependencies: []
+    dependencies: [],
+    dependents: []
   };
 
-  modules[id] = _module;
+  modules[id] = mod;
   modulesByFilename[filename] = id;
 
-  moduleLog(`created module ${_module.id} for "${filename}"`);
+  moduleLog(`created module ${mod.id} for "${filename}"`);
 
-  return _module;
+  return mod;
+}
+
+function getModuleById(id) {
+  return modules[id];
 }
 
 let depTransform = 'chubs-deps';
@@ -107,18 +110,18 @@ transform.pipeline.addTransformer(
   }
 );
 
-function build(filename) {
+function build(mod) {
+  const filename = mod.filename;
+
   buildLog(`building ${filename}`);
 
   const buildStart = Date.now();
 
-  const _module = getModule(filename);
-
-  if (!_module.code) {
+  if (!mod.code) {
     buildLog(`reading ${filename}`);
 
     let whitelist;
-    if (/node_modules/.test(filename)) {
+    if (/nodemods/.test(filename)) {
       whitelist = [depTransform];
     }
 
@@ -136,22 +139,18 @@ function build(filename) {
 
     parseLog(`Spent ${parseEnd - parseStart}ms parsing ${filename}`);
 
-    _module.code = data.code;
+    mod.code = data.code;
   }
 
   const buildEnd = Date.now();
   buildPerfLog(`Spent ${buildEnd - buildStart}ms building ${filename}`);
 
-  if (_module.dependencies.length) {
+  if (mod.dependencies.length) {
     const buildDepsStart = Date.now();
 
-    _module.dependencies.forEach(function(dep) {
-      let depModule = getModule(dep.filename);
-
-      if (!depModule.code) {
-        buildLog(`building dependency ${depModule.filename}`);
-        build(depModule.filename);
-      }
+    mod.dependencies.forEach((id) => {
+      let depModule = getModuleById(id);
+      build(depModule);
     });
 
     const buildDepsEnd = Date.now();
@@ -159,62 +158,105 @@ function build(filename) {
   }
 }
 
-function chubs(filename) {
-  build(filename);
+function defineModule(mod) {
+  const commentDivider = _.repeat('-', mod.filename.length);
 
-  let definitions = [];
-
-  for (var id in modules) {
-    const _module = modules[id];
-    const commentDivider = _.repeat('-', _module.filename.length);
-    const definition = `
-__define('${_module.id}', function(module, exports, require) {
-// start: ${_module.filename}
-// -------${commentDivider}
-
-
-${_module.code}
-
-
-// -----${commentDivider}
-// end: ${_module.filename}
+  return `
+// --------------------${commentDivider}
+// Module ${mod.id} -> ${mod.filename}
+// --------------------${commentDivider}
+__define('${mod.id}', function(module, exports, require) {
+${mod.code}
 });`;
-    definitions.push(definition);
-  }
+}
 
-  const entryModule = modulesByFilename[filename];
+function defineModules(modules) {
+  return _.map(modules, defineModule);
+}
 
-  const script = `
+function generateScript(modules, entry) {
+  const entryModule = getModuleByFilename(entry);
+
+  return `
 (function() {
+// Preserve a reference to the global
 var __global = this;
-var __modules = Object.create(null);
+
+// A map of module ids to module functions
+var __moduleDefinitions = Object.create(null);
+
+// A store of the cached output from the module definitions
 var __requireCache = Object.create(null);
 
+// The \`require\` function used by the modules
 function __require(dep) {
   if (__requireCache[dep] !== undefined) {
     return __requireCache[dep];
   }
 
-  var module = {exports: {}};
+  var _module = {exports: {}};
 
-  __requireCache[dep] = __modules[dep].call(__global, module, module.exports, __require);
+  var moduleDefinition = __moduleDefinitions[dep];
+
+  __requireCache[dep] = moduleDefinition.call(__global, _module, _module.exports, __require);
 
   return module.exports;
 };
 
-var __define = function(id, _module) {
-  __modules[id] = _module;
+// Populate the module definitions
+var __define = function(id, func) {
+  __moduleDefinitions[id] = func;
 };
 
-${definitions.join('\n\n')}
+${defineModules(modules).join('\n\n')}
 
 
-__require('${entryModule}');
+// Call ${entryModule.filename}
+__require('${entryModule.id}');
 
 })();
   `;
-
-  console.log(script)
 }
 
-module.exports = chubs;
+function watch(modules, startTime) {
+  const filenames = _(modules).values().pluck('filename').value();
+
+  wp.watch(filenames, [], startTime);
+}
+
+function chubs(opts, cb) {
+  const startTime = Date.now();
+
+  let entry = opts.entry;
+  if (!entry) {
+    throw new Error(`Entry option was not defined in ${JSON.stringify(opts)}`);
+  }
+
+  if (!path.isAbsolute(entry)) {
+    entry = path.resolve(entry);
+  }
+
+  console.log(`Entry: ${entry}`);
+
+  let mod = getModuleByFilename(entry);
+
+  build(mod);
+
+  watch(modules, startTime);
+
+  wp.on('change', function(filename) {
+    const mod = getModuleByFilename(filename);
+    mod.code = undefined;
+    build(mod);
+    console.log(`Rebuilt module ${mod.id}: ${mod.filename}`);
+  });
+
+  cb({
+    startTime,
+    entry,
+    output: generateScript(modules, entry),
+    modules
+  });
+}
+
+export default chubs;

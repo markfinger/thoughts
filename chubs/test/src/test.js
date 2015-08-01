@@ -15,5 +15,5 @@ module.exports = {
   b: b,
   c: c
 };
-
+var hello = 'hello';
 foo();

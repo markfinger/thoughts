@@ -1,0 +1,1 @@
+{"version":3,"sources":["../src/foo.js"],"names":[],"mappings":";;;;;AAAA,SAAS,GAAG,GAAG;AACb,SAAO,CAAC,GAAG,CAAC,KAAK,CAAC,CAAA;CACnB;;qBAEc,GAAG","file":"foo.js","sourcesContent":["function foo() {\n  console.log('foo')\n}\n\nexport default foo;\n"]}

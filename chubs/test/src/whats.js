@@ -16,3 +16,5 @@ module.exports = {
   b: b,
   c: c
 };
+
+_.range(10).forEach(function(i) { console.log(i) });

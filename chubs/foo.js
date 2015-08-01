@@ -1,3 +1,15 @@
+{ '1': 
+   { id: '1',
+     filename: '/Users/markfinger/Projects/thoughts/chubs/test/test.js',
+     dependencies: {},
+     dependents: {},
+     code: '\'use strict\';\n\nfunction _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { \'default\': obj }; }\n\nvar _foo = require(\'2\');\n\nvar _foo2 = _interopRequireDefault(_foo);\n\nvar a = 10;\n\nvar b = function b() {\n  return a;\n};\n\nfunction c(d) {\n  return d + a;\n}\n\nmodule.exports = {\n  a: a,\n  b: b,\n  c: c\n};\n\n(0, _foo2[\'default\'])();' },
+  '2': 
+   { id: '2',
+     filename: '/Users/markfinger/Projects/thoughts/chubs/test/foo.js',
+     dependencies: {},
+     dependents: {},
+     code: '\'use strict\';\n\nObject.defineProperty(exports, \'__esModule\', {\n  value: true\n});\nfunction foo() {\n  console.log(\'foo\');\n}\n\nexports[\'default\'] = foo;\nmodule.exports = exports[\'default\'];' } }
 
 (function() {
 var __global = this;
@@ -22,7 +34,9 @@ var __define = function(id, _module) {
 
 
 __define('1', function(module, exports, require) {
-// file: /Users/markfinger/Projects/thoughts/chubs/test/test.js
+// /Users/markfinger/Projects/thoughts/chubs/test/test.js
+// ------------------------------------------------------
+
 
 'use strict';
 
@@ -49,11 +63,16 @@ module.exports = {
 };
 
 (0, _foo2['default'])();
+
+
+// ------------------------------------------------------
 });
 
 
 __define('2', function(module, exports, require) {
-// file: /Users/markfinger/Projects/thoughts/chubs/test/foo.js
+// /Users/markfinger/Projects/thoughts/chubs/test/foo.js
+// -----------------------------------------------------
+
 
 'use strict';
 
@@ -66,6 +85,9 @@ function foo() {
 
 exports['default'] = foo;
 module.exports = exports['default'];
+
+
+// -----------------------------------------------------
 });
 
 
