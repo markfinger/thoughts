@@ -10,7 +10,7 @@ Status quo
     + large amount of plugin hooks
     + add/remove assets during compilation
       + allows external compilers to inject assets
-      + allows transformations and extraction into differnt
+      + allows transformations and asset extraction
       - difficult to reason about
     + mutate assets during compilation
       - difficult to reason about final outcome
@@ -29,7 +29,7 @@ Status quo
     - implicit behaviour due to coupling
       - ex: including uglify plugin automatically causes every loader to optimize
   - poor docs
-    - internal docs are non-existant
+    - internal docs are non-existent
       - difficult to understand codebase
       - difficult to understand interplay betweens modules
     - external docs are patchy
@@ -37,7 +37,7 @@ Status quo
   - loader configuration
     - basic
     - opaque
-    - string-based query params are difficult to read and compilicate the cascade of loaders
+    - string-based query params are difficult to read and complicate the cascade of loaders
     + query params can defined in a 'query' prop
   + code-splitting
     - opaque
@@ -52,9 +52,9 @@ Status quo
     - initial builds are slow
       - no caching
       - difficult to rebuild state from serialized data
-        - heavy-use of objects and generated props/methods
+        - heavy-use of dynamically bound props and methods
     - synchronous loaders can lock up the event loop
-      - upstream, difficult to fix
+      - downstream issue, not a reflection of the core
     + incremental builds are fast
       + maintains cache
         - mutable object
@@ -75,15 +75,18 @@ Status quo
       + probably down to compilation and source map generation
       
 + browserify
-  - poor API
+  - limited surface area of API
     - seems to be mostly oriented around the CLI interface
     - opaque
-  + well-written, modular design
+    + simple
+  + concise, modular design
     + clear divisions enable decoupling
       + decoupling ensures API contract
+    - decoupling limits optimisations (caching, etc)
   - heavy-dependence on third party libs
     - varying degrees of quality
-    + more packages ensures that individual packages can be maintained more easily
-      + more eyes ...
+    + easier maintenance due to more contributors
   + stream-based
     + async by default
+    - file-based transforms
+      - typical transforms have to continuously re-parse the files

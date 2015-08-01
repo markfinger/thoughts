@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+require('source-map-support').install({
+  handleUncaughtExceptions: false
+});
+
 var path = require('path');
 var babel = require('babel');
 

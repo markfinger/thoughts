@@ -1,0 +1,19 @@
+- Compile
+  - process files through babel
+  - resolve deps recursively
+    - process deps
+  - rewrite all deps
+
+- Cache
+  - controlled by a flag
+    - defaults to true
+  - file-based
+    - [cwd]/.some_cache/[cache-key].json
+  - cache key determined by
+    - transforms applied
+      - name
+      - version
+    - file
+      - abs path
+      - timestamp (or maybe just compare the cache and the timestamp?)
+    - library version
