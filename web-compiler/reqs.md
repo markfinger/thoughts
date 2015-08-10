@@ -7,9 +7,10 @@
 - Cache
   - controlled by a flag
     - defaults to true
+  - state dump?
   - file-based
     - [cwd]/.some_cache/[cache-key].json
-  - cache key determined by
+  - cache-key determined by
     - transforms applied
       - name
       - version
@@ -17,3 +18,47 @@
       - abs path
       - timestamp (or maybe just compare the cache and the timestamp?)
     - library version
+
+- Config files
+  - type
+    - declarative
+      - can be hot-swapped
+        - compiler can swap out current config and restart build
+        - live validation/feedback for config
+      - needs env support
+        - root keys denote environments
+          - eg:
+            - default:
+              ...
+            - dev:
+              ...
+    - programmatic
+      - can respond to environment
+        - more difficult to debug
+  - format
+    - js
+      - powerful
+      - native support for regular expressions
+      - can dynamically generate config
+        - more complicated
+      - can't be hot-swapped safely
+    - json
+      - more conventional and easily consumed
+      - can be hot-swapped
+      - no comments
+    - yaml
+      - well supported
+      - can be hot-swapped
+      - comments
+        - generally a necessity for complicated builds
+      - has parsing overhead
+  - validation
+    - should validate types
+    - should raise warnings about unknown keys
+      - prevents issues from typos
+
+- Manifest files
+  - easier integration into external tools
+  - paths to generated files
+  - errors
+  - warnings

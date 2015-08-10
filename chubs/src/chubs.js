@@ -1,16 +1,70 @@
 import path from 'path';
-import {transform, types} from 'babel-core';
 import fs from 'fs';
+import http from 'http';
+import express from 'express';
+import {transform, types} from 'babel-core';
 import resolve from 'resolve';
 import _ from 'lodash';
 import Watchpack from 'watchpack';
+import ws from 'ws';
+import nodeLibsBrowser from 'node-libs-browser';
 import logger from './logger';
 
+const emptyMock = resolve.sync(`node-libs-browser/mock/empty`);
+const nodeLibs = _.mapValues(nodeLibsBrowser, (filename, dep) => {
+  if (filename) {
+    return filename;
+  }
+
+  try {
+    return resolve.sync(`node-libs-browser/mock/${dep}`);
+  } catch(err) {
+    return emptyMock;
+  }
+});
+
+let entry;
+
 let moduleId = 0;
-let modules = Object.create(null);
-let modulesByFilename = Object.create(null);
+const modules = Object.create(null);
+const modulesByFilename = Object.create(null);
 
 const wp = new Watchpack();
+
+const app = express();
+const server = http.Server(app);
+const wss = new ws.Server({server});
+
+let connections = [];
+
+wss.on('connection', function(ws) {
+  console.log('websocket connected');
+
+  connections.push(ws);
+
+  ws.on('close', function() {
+    console.log('websocket closed');
+    connections = _.without(connections, ws);
+  });
+});
+
+app.get('/', function(req, res) {
+  const script = generateScript(modules, getModuleByFilename(entry));
+
+  res.end(`
+<html>
+<body>
+  <script>
+    ${script}
+  </script>
+</body>
+</html>
+  `);
+});
+
+server.listen(8000, function() {
+  console.log('listening at http://127.0.0.1:8000');
+});
 
 const resolveLog = logger('resolve');
 const depLog = logger('dep');
@@ -23,9 +77,16 @@ const buildPerfLog = logger('build-perf');
 function getDep(filename, dep) {
   resolveLog(`resolving dep "${dep}" from ${filename}`);
 
-  let depPath = resolve.sync(dep, {
-    basedir: path.dirname(filename)
-  });
+  let depPath;
+  if (dep === 'inherits') {
+    depPath = resolve.sync('./hacks/inherits_browser.js');
+  } else if (dep in nodeLibs) {
+    depPath = nodeLibs[dep];
+  } else {
+    depPath = resolve.sync(dep, {
+      basedir: path.dirname(filename)
+    });
+  }
 
   resolveLog(`resolved dep "${dep}" to ${depPath}`);
 
@@ -85,23 +146,45 @@ transform.pipeline.addTransformer(
   depTransform,
   {
     visitor: {
+      //Program: {
+      //  exit(node, parent, scope, context) {
+      //    if (context.__mockProcess) {
+      //      debugger
+      //    }
+      //  }
+      //},
+      //ExpressionStatement: {
+      //  exit(node, parent, scope, context) {
+      //    if (types.isIdentifier(node.object) && node.object.name === 'process') {
+      //      context.__mockProcess = true;
+      //    }
+      //  }
+      //},
       CallExpression: {
-        exit(node, parent, scope, path) {
-          if (node.callee.name === 'require') {
-            const dep = node.arguments[0];
+        exit(node, parent, scope, context) {
+          const name = node.callee.name;
 
-            if (!types.isLiteral(dep)) {
-              throw new Error('Dependency is not a literal: ' + JSON.stringify(dep))
+          if (name === 'require') {
+            if (node.arguments.length != 1) {
+              throw new Error(`Can only process requires with one arg: ${JSON.stringify(node)}`);
             }
 
-            const filename = path.opts.filename;
+            const dep = node.arguments[0];
+            const filename = context.opts.filename;
+
+            let depModule;
+
+            // TODO: non-hacky way to avoid dynamic requires
+            if (!types.isLiteral(dep)) {
+              depModule = getModuleByFilename(emptyMock);
+              node.arguments = [types.literal(JSON.stringify(depModule.id))];
+              return;
+            }
 
             parseDepLog(`found dep "${dep.value}" in ${filename}`);
-
-            const depModule = addDep(filename, dep.value);
+            depModule = addDep(filename, dep.value);
 
             parseDepLog(`rewriting dep "${dep.value}" to "${depModule.id}"`);
-
             dep.value = depModule.id + '';
           }
         }
@@ -113,15 +196,15 @@ transform.pipeline.addTransformer(
 function build(mod) {
   const filename = mod.filename;
 
-  buildLog(`building ${filename}`);
-
-  const buildStart = Date.now();
-
   if (!mod.code) {
+    buildLog(`building ${filename}`);
+
+    const buildStart = Date.now();
+
     buildLog(`reading ${filename}`);
 
     let whitelist;
-    if (/nodemods/.test(filename)) {
+    if (/node_modules/.test(filename)) {
       whitelist = [depTransform];
     }
 
@@ -140,17 +223,19 @@ function build(mod) {
     parseLog(`Spent ${parseEnd - parseStart}ms parsing ${filename}`);
 
     mod.code = data.code;
-  }
 
-  const buildEnd = Date.now();
-  buildPerfLog(`Spent ${buildEnd - buildStart}ms building ${filename}`);
+    const buildEnd = Date.now();
+    buildPerfLog(`Spent ${buildEnd - buildStart}ms building ${filename}`);
+  }
 
   if (mod.dependencies.length) {
     const buildDepsStart = Date.now();
 
     mod.dependencies.forEach((id) => {
       let depModule = getModuleById(id);
-      build(depModule);
+      if (!depModule.code) {
+        build(depModule);
+      }
     });
 
     const buildDepsEnd = Date.now();
@@ -174,13 +259,14 @@ function defineModules(modules) {
   return _.map(modules, defineModule);
 }
 
-function generateScript(modules, entry) {
-  const entryModule = getModuleByFilename(entry);
-
+function generateScript(modules, entryModule) {
   return `
-(function() {
-// Preserve a reference to the global
-var __global = this;
+(function(__global) {
+// TODO: remove this
+window.require = __require;
+
+// Mock the process global
+var process = {env: {}};
 
 // A map of module ids to module functions
 var __moduleDefinitions = Object.create(null);
@@ -194,17 +280,25 @@ function __require(dep) {
     return __requireCache[dep];
   }
 
+  var moduleDefinition = __moduleDefinitions[dep];
+  if (moduleDefinition === undefined) {
+    throw new Error('Module "' + dep + '" has no definition');
+  }
+
   var _module = {exports: {}};
 
-  var moduleDefinition = __moduleDefinitions[dep];
+  // Prepopulate the require cache early to avoid circular dependencies
+  __requireCache[dep] = {};
 
-  __requireCache[dep] = moduleDefinition.call(__global, _module, _module.exports, __require);
+  moduleDefinition.call(__global, _module, _module.exports, __require);
 
-  return module.exports;
+  __requireCache[dep] = _module.exports;
+
+  return _module.exports;
 };
 
-// Populate the module definitions
-var __define = function(id, func) {
+// Populates the module definitions
+function __define(id, func) {
   __moduleDefinitions[id] = func;
 };
 
@@ -214,7 +308,7 @@ ${defineModules(modules).join('\n\n')}
 // Call ${entryModule.filename}
 __require('${entryModule.id}');
 
-})();
+})(this);
   `;
 }
 
@@ -227,7 +321,7 @@ function watch(modules, startTime) {
 function chubs(opts, cb) {
   const startTime = Date.now();
 
-  let entry = opts.entry;
+  entry = opts.entry;
   if (!entry) {
     throw new Error(`Entry option was not defined in ${JSON.stringify(opts)}`);
   }
@@ -248,15 +342,16 @@ function chubs(opts, cb) {
     const mod = getModuleByFilename(filename);
     mod.code = undefined;
     build(mod);
-    console.log(`Rebuilt module ${mod.id}: ${mod.filename}`);
+    console.log(`Rebuilt module '${mod.id}' => ${mod.filename}`);
+    connections.forEach(ws => ws.send(JSON.stringify(mod)));
   });
 
-  cb({
-    startTime,
-    entry,
-    output: generateScript(modules, entry),
-    modules
-  });
+  //cb({
+  //  startTime,
+  //  entry,
+  //  output: generateScript(modules, entry),
+  //  modules
+  //});
 }
 
 export default chubs;

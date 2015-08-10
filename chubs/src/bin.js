@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
-require('source-map-support').install({
-  handleUncaughtExceptions: false
-});
-
+import sourceMapSupport from 'source-map-support';
 import yargs from 'yargs';
 import chubs from './chubs';
+
+sourceMapSupport.install({
+  handleUncaughtExceptions: false
+});
 
 const argv = yargs
   .usage('Usage: $0 <entry>')
