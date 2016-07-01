@@ -50,7 +50,7 @@
       - well supported
       - can be hot-swapped
       - comments
-        - generally a necessity for complicated builds
+        - generally a necessity for complicated builds & documentation
       - has parsing overhead
   - validation
     - should validate types
@@ -62,3 +62,19 @@
   - paths to generated files
   - errors
   - warnings
+
+- Assets
+  - types
+    - js
+    - json
+    - css
+    - files (images/fonts)
+  - implement support as plugins
+    - decoupled and overrideable
+    - need to be able to pass config in
+
+- Plugins
+  - should implement assets
+  - state/action-based interface, eg:
+    - parseFile
+    - resolveDependency

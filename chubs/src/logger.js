@@ -2,8 +2,6 @@ import debug from 'debug';
 
 const namespace = 'chubs';
 
-function log(name) {
+export default function logger(name) {
   return debug(`${namespace}:${name}`);
 }
-
-export default log;

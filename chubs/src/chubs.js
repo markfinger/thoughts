@@ -164,6 +164,8 @@ transform.pipeline.addTransformer(
         exit(node, parent, scope, context) {
           const name = node.callee.name;
 
+          debugger
+
           if (name === 'require') {
             if (node.arguments.length != 1) {
               throw new Error(`Can only process requires with one arg: ${JSON.stringify(node)}`);
