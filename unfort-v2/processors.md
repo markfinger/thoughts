@@ -1,31 +1,33 @@
 ```js
 const services = {
+  // FS
   readFile(path) {},
   // Should be distinct from `readFile` in case the original buffer is required
   readFileAsText(path) {},
   readFileModifiedTime(path) {},
   statFile(path) {},
   fileExists(path) {},
-  isTextFile(path) {},
   generateFileContentHash(path) {},
+
+  // Records
+  isTextFile(path) {},
   resolveDependency(id, record) {},
   generateRecordHash(record) {},
+  generateRecordCacheKey(record) {},
+  generateRecordUrl(record) {},
 
   // Caching
-  generateRecordCacheKey(record) {},
   getCachedData(key, property) {},
   setCachedData(key, property, value) {},
   writeCachedData(key) {},
-
-  // Used for source maps
-  generateRecordUrl(record) {},
 
   // Profiling
   startTimer(data) {},
   stopTimer(timer) {},
 
   // Workers
-  executeFunction(file, functionName, args) {}
+  // Use object arg as may want to add extra details later
+  executeFunction({file, functionName, args}) {}
 };
 
 const hooks = {

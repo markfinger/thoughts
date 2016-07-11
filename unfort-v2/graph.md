@@ -34,32 +34,8 @@ a single compilation process may produce:
 assets need to be able to declare:
 - file dependencies
 - the type and details of relationships to other assets
--
 
 -------------------------
-
-by detecting calls to the pipeline and accesses to other records
-we can detect an implicit connection between the file-system and
-compiled assets. In effect, we no longer require explicit key
-caches as we can compute them with more accuracy.
-
-Eg: when resolving a path, we can detect all the "is file",
-"read file" calls such that we can infer when to invalidate
-something
-
-if a change occurs to a file used to generate one or more assets,
-we can then invalidate them. by extension, if we invalidate an
-asset, any other assets that we dependent on the content of that
-asset will also be invalid.
-
-in effect, we detect the actions required to create an asset,
-and can infer conditions when that asset is no longer valid.
-
-seems complicated, but interesting. definitely worth considering,
-if only for the novelty.
-
--------------------------
-
 
 hypothesizing a declarative output for a build system
 [
@@ -84,7 +60,7 @@ hypothesizing a declarative output for a build system
   },
   {
     type: 'relationship',
-    dependent: '/some/other/file'
+    dependent: '/some/file'
     dependency: '/some/other/file'
   }
 ]
